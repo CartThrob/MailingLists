@@ -83,7 +83,7 @@ class Cartthrob_mailing_list_mcp {
 		$this->initialize();
 		
 		$structure['class']	= 'campaign_monitor'; 
-		$structure['description']	='You must use your main Campaign Monitor account API key, and your client\'s API Client ID, and the List ID for each list you wish to send to. For more information on where to find this information in your Campaign Monitor settings <a href="http://www.campaignmonitor.com/api/getting-started/">click here &raquo;</a>. In your checkout form, you must add an input field called "custom_data[campaign_monitor]" with the list ID that you want to send to.'; 
+		$structure['description']	='campaign_monitor_instructions'; 
 		$structure['caption']	=''; 
 		$structure['title']	= "campaign_monitor"; 
 	 	$structure['settings'] = array(
@@ -107,7 +107,7 @@ class Cartthrob_mailing_list_mcp {
 		$this->initialize();
 		
 		$structure['class']	= 'mailchimp'; 
-		$structure['description']	='In your checkout form, you must add an input field called "custom_data[mailchimp]" with the list ID that you want to send to.'; 
+		$structure['description']	='mailchimp_instructions'; 
 		$structure['caption']	=''; 
 		$structure['title']	= "mailchimp"; 
 	 	$structure['settings'] = array(

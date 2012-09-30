@@ -8,6 +8,8 @@ This extension makes it so that you can add the customer to one or more Campaign
 **Single list example**
 
 	<input type="hidden" value="123" name="custom_data[campaign_monitor]" /> 
+	or for mail chimp
+	<input type="hidden" value="123" name="custom_data[mailchimp]" /> 
 
 **Multiple list example**
 
