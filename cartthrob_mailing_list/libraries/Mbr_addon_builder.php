@@ -16,7 +16,7 @@ if (! class_exists('Mbr_addon_builder'))
 		public $settings = array(); 
 		public $module_enabled = NULL; 
 		public $extension_enabled = NULL; 
-		public $no_form = NULL; 
+		public $no_form = array(); 
 		public $no_nav = array(); 
 		public $version = 1; 
 		public $nav = array();
@@ -44,9 +44,20 @@ if (! class_exists('Mbr_addon_builder'))
 		);
 		public $cartthrob, $store, $cart;
 		
+		public $drag_handle; 
 		public function __construct()
 		{
 			$this->EE =& get_instance();
+			
+			if ($this->get_cartthrob_settings())
+			{
+				$this->drag_handle = $this->EE->config->item('theme_folder_url').'third_party/cartthrob/images/ct_drag_handle.gif'; 
+			}
+			else
+			{
+				$this->drag_handle = $this->EE->config->item('theme_folder_url').'third_party/'.$this->module_name.'/images/ct_drag_handle.gif'; 
+			}
+			
  		}
 		public function initialize($params = array())
 		{
@@ -76,7 +87,11 @@ if (! class_exists('Mbr_addon_builder'))
 			$this->EE->load->library('locales');
 			
 			$this->settings = $this->EE->get_settings->settings($this->module_name);
-			$this->EE->load->add_package_path(PATH_THIRD.'cartthrob/'); 
+			
+			if ($this->get_cartthrob_settings() )
+			{
+				$this->EE->load->add_package_path(PATH_THIRD.'cartthrob/'); 
+			}
 			$this->EE->load->add_package_path(PATH_THIRD.$this->module_name."/"); 
 
 			$this->EE->load->helper(array('security',  'form',  'string', 'data_formatting'));
@@ -96,8 +111,7 @@ if (! class_exists('Mbr_addon_builder'))
 				$this->extension_enabled = (bool) $this->EE->db->where(array('class' => ucwords($this->module_name).'_ext', 'enabled' => 'y'))->count_all_results('extensions');
 			}
 		}
-	
-		//////////////////////////////////////////
+ 		//////////////////////////////////////////
 		//////// MCP Functions
 		//////////////////////////////////////////
 		public function  load_view($current_nav, $more = array(), $structure = array())
@@ -108,10 +122,13 @@ if (! class_exists('Mbr_addon_builder'))
 
 	 		$nav = $this->nav;
 
+			
 			$settings_views = array();
 
 			$view_paths = array();
 
+			/*
+			// this currently doesn't do anything since settigns_views is blank
 			if (is_array($settings_views) && count($settings_views))
 			{
 				foreach ($settings_views as $key => $value)
@@ -134,6 +151,7 @@ if (! class_exists('Mbr_addon_builder'))
 					}
 				}
 			}
+			*/ 
 
 			$sections = array();
 
@@ -162,33 +180,42 @@ if (! class_exists('Mbr_addon_builder'))
 			$statuses = array(); 
 			$product_channel_titles = array();
 			$product_channel_fields = array(); 
-
-			$product_channels = $this->EE->cartthrob->store->config('product_channels'); 
-
+			$order_channel_fields = array(); 
+			// @TODO remove this stuff from this generic function so it can be used without CT. 
+			$product_channels = array();
+			$order_channel = array(); 
+			if ($this->get_cartthrob_settings())
+			{
+				$product_channels = $this->EE->cartthrob->store->config('product_channels'); 
+				$order_channel = $this->EE->cartthrob->store->config('orders_channel'); 
+			}
 			foreach ($channels as $channel)
 			{
-				// get product channels and fields
-				if (in_array($channel['channel_id'], $product_channels))
-				{
-					$product_channel_titles[$channel['channel_id']] = $channel['channel_title'];
-					$channel_fields = $this->EE->field_model->get_fields($channel['field_group'])->result_array(); 
-					foreach ($channel_fields as $key => &$data)
-					{
-						$product_channel_fields[$channel['channel_id']][$key] = array_intersect_key($data, array_fill_keys(array('field_id', 'site_id', 'group_id', 'field_name', 'field_type', 'field_label'), TRUE));
-					}
-				}
 				// get all channels and fields
-
 				$channel_titles[$channel['channel_id']] = $channel['channel_title'];
 				$channel_fields = $this->EE->field_model->get_fields($channel['field_group'])->result_array(); 
 				foreach ($channel_fields as $key => &$data)
 				{
 					$fields[$channel['channel_id']][$key] = array_intersect_key($data, array_fill_keys(array('field_id', 'site_id', 'group_id', 'field_name', 'field_type', 'field_label'), TRUE));
 				}
-					
 				$statuses[$channel['channel_id']] = $this->EE->channel_model->get_channel_statuses($channel['status_group'])->result_array();
 			}
-			
+
+			foreach ($channels as $channel)
+			{
+				// @TODO fill product and order channel fields from already populated 
+				// get product channels and fields
+				if (in_array($channel['channel_id'], $product_channels))
+				{
+					$product_channel_titles[$channel['channel_id']] = $channel['channel_title'];
+					$product_channel_fields[$channel['channel_id']] = $fields[$channel['channel_id']]; 
+				}
+				// order channel fields
+				if ($channel['channel_id'] == $order_channel)
+				{
+					$order_channel_fields[$channel['channel_id']] = $fields[$channel['channel_id']]; 
+				}
+			}
 			$status_titles = array(); 
 			foreach ($statuses as $status)
 			{
@@ -208,6 +235,7 @@ if (! class_exists('Mbr_addon_builder'))
 				'status_titles' => $status_titles,
 				'product_channel_titles'	=> $product_channel_titles,
 				'product_channel_fields'	=> $product_channel_fields,
+				'order_channel_fields'		=> $order_channel_fields,
 				'settings_mcp' => $this,
 				'sections' => $sections,
 				'view_paths' => $view_paths,
@@ -247,9 +275,16 @@ if (! class_exists('Mbr_addon_builder'))
 			return $this->view_settings_form($data); 
 		}
 		
-		public function form_update()
+		public function form_update($database_table = NULL)
 		{
-			$table = $this->module_name. "_options"; 
+			if ($database_table)
+			{
+				$table = $database_table;
+			}
+			else
+			{
+				$table = $this->module_name. "_options"; 
+			}
 			$model = new Generic_model($table);
 
 
@@ -273,7 +308,6 @@ if (! class_exists('Mbr_addon_builder'))
 					$data['data'] = serialize($data["sub_settings"]["data"]); 
 				}
 
-				#var_dump($data); exit; 
 	 			if (!$this->EE->input->post('id'))
 				{
 	 				$model->create($data);
@@ -384,13 +418,13 @@ if (! class_exists('Mbr_addon_builder'))
 		public function get_cartthrob_settings()
 		{
 			$this->EE->load->library('get_settings');
-			if (class_exists('cartthrob'))
+			
+			if ( (bool) $this->EE->db->where('module_name', 'Cartthrob')->count_all_results('modules'))
 			{
 				return $this->EE->get_settings->settings("cartthrob");
-
 			}
-			return array(); 
 
+			return array(); 
 		}
 		// @TODO deprecate
 		public function channel_dropdown_js()
@@ -559,18 +593,22 @@ if (! class_exists('Mbr_addon_builder'))
 
 			$plugins = array();
 
-			$paths[] = CARTTHROB_PATH.'plugins/'.$type.'/';
-
-			if ($this->EE->config->item('cartthrob_third_party_path'))
+			$paths = array(); 
+			if (defined("CARTTHROB_PATH"))
 			{
-				$paths[] = rtrim($this->EE->config->item('cartthrob_third_party_path'), '/').'/'.$type.'_plugins/';
+				$paths[] = CARTTHROB_PATH.'plugins/'.$type.'/';
+				require_once CARTTHROB_PATH.'core/Cartthrob_'.$type.EXT;
+				
+				
+				if ($this->EE->config->item('cartthrob_third_party_path'))
+				{
+					$paths[] = rtrim($this->EE->config->item('cartthrob_third_party_path'), '/').'/'.$type.'_plugins/';
+				}
+				else
+				{
+					$paths[] = PATH_THIRD.'cartthrob/third_party/'.$type.'_plugins/';
+				}
 			}
-			else
-			{
-				$paths[] = PATH_THIRD.'cartthrob/third_party/'.$type.'_plugins/';
-			}
-
-			require_once CARTTHROB_PATH.'core/Cartthrob_'.$type.EXT;
 
 			foreach ($paths as $path)
 			{
@@ -655,10 +693,24 @@ if (! class_exists('Mbr_addon_builder'))
 			}
 			else
 			{
+				$new_options = array(); 
 				foreach ($options as $key => $value)
 				{
-					$options[$key] = lang($value);
+					// optgropus
+					if (is_array($value))
+					{	
+						$key = lang($key); 
+						foreach ($value as $sub=> $item)
+						{
+							$new_options[$key][$sub] = lang($item);
+						}
+					}
+					else
+					{
+						$new_options[$key] = lang($value);
+					}
 				}
+				$options = $new_options; 
 			}
 
 			if ( ! is_array($attributes))
@@ -670,6 +722,24 @@ if (! class_exists('Mbr_addon_builder'))
 				case 'select':
 					if (empty($options)) $attributes['value'] = $current_value;
 					$output = form_dropdown($name, $options, $current_value, _attributes_to_string($attributes));
+					break;
+				case 'file':
+
+					$this->EE->load->library('file_field');
+					$trigger = NULL; 
+					if (isset($attributes['trigger']))
+					{
+						$trigger =  $attributes['trigger']; 
+					}
+					$config = array(
+						'publish'	=> FALSE,
+						'trigger'	=> $trigger,
+						'field_name' => $name
+					);
+ 					$this->EE->file_field->browser($config);
+					$output = $this->EE->file_field->field($name, $current_value, $allowed_file_dirs = 'all', $content_type = 'image');
+ 
+					#$output .= '<input type="file" name="choose file" class="file_upload" />'; 
 					break;
 				case 'multiselect':
 					$output = form_multiselect($name."[]", $options, $current_value, _attributes_to_string($attributes));
@@ -870,7 +940,7 @@ if (! class_exists('Mbr_addon_builder'))
 				$this->EE->load->model('table_model');
 				$this->EE->table_model->update_tables($this->tables);
 			}
-
+ 
 			/////////////// NOTIFICICATIONS /////////////////////////
 			if (!empty($this->notification_events))
 			{
@@ -879,36 +949,36 @@ if (! class_exists('Mbr_addon_builder'))
 				if ($this->EE->db->table_exists('cartthrob_notification_events'))
 				{
 					$this->EE->db->select('notification_event')
-							->from('cartthrob_notification_events')
-							->like('application', ucwords($this->module_name), 'after');
-
-					if ($this->EE->db->get()->result())
+ 							->like('application', ucwords($this->module_name), 'after');
+					$query = $this->EE->db->get('cartthrob_notification_events'); 
+					
+					if ($query->result() && $query->num_rows() > 0)
 					{
-						foreach ($this->EE->db->get()->result() as $row)
+						foreach ($query->result() as $row)
 						{
 							$existing_notifications[] = $row->notification_event;
 						}					
 					}
 
-				foreach ($this->notification_events as $event)
-				{
-					if (!empty($event))
+					foreach ($this->notification_events as $event)
 					{
-						if ( ! in_array($event, $existing_notifications))
+						if (!empty($event))
 						{
-							$this->EE->db->insert(
-								'cartthrob_notification_events',
-								array(
-									'application' => ucwords($this->module_name),
-									'notification_event' => $event,
-								)
-							);
+							if ( ! in_array($event, $existing_notifications))
+							{
+								$this->EE->db->insert(
+									'cartthrob_notification_events',
+										array(
+											'application' => ucwords($this->module_name),
+											'notification_event' => $event,
+										)
+									);
+							}
 						}
 					}
 				}
 			}
-			}
-
+			// end notifications
 
 
 			/////////////// EXTENSIONS /////////////////////////
@@ -1034,37 +1104,42 @@ if (! class_exists('Mbr_addon_builder'))
 		public function view_settings_template($data)
 		{
 			extract($data); 
+			
+			$content =NULL; 
+			$content ='<div class="'.$structure['class'].'_settings" id="'.$structure['class'].'">';
+			
 			////////////////////////////// Main Heading /////////////////////// 
 			$tmpl = array (
 				'table_open'          => '<table class="mainTable padTable" border="0" cellspacing="0" cellpadding="0">',
-
-				'heading_cell_start'  => '<th colspan="2">',
-				'heading_cell_end'    => '</th>',
-
-				'table_close'         => '</table>'
 			);
 
+			$output_table = FALSE; 
 			if (!empty($structure['caption']))
 			{
+				$output_table = TRUE; 
 				$this->EE->table->set_caption(lang($structure['caption']));
 			}
 
 			if (!empty($structure['description']))
 			{
+				$output_table = TRUE; 
 				$this->EE->table->set_heading(array(
-					'<strong>'.lang($structure['title']) .'</strong><br />'.$structure['description']
+					'<strong>'.lang($structure['title']) .'</strong><p>'.lang($structure['description'])."</p>"
 					));
 			}
-			else
+			elseif(!empty($structure['title']))
 			{
+				$output_table = TRUE; 
 				$this->EE->table->set_heading(array(
 					'<strong>'.lang($structure['title']) .'</strong>'
 					));
-
 			}
-
-			$this->EE->table->set_template($tmpl);
-			$content = $this->EE->table->generate(); 
+			// normally this just outputs a table with nothing in it other than headers. This kills that if it's empty
+			if ($output_table)
+			{
+				$this->EE->table->set_template($tmpl);
+				$content .= $this->EE->table->generate(); 
+			}
 			$this->EE->table->clear();
 
 		 	///////////////////////////////////////////////////////////////////
@@ -1127,12 +1202,12 @@ if (! class_exists('Mbr_addon_builder'))
 							$content .=	'id	="'.$setting['short_name'].'_setting_'.$count.'">';
 
 								$content .='<td><img border="0" ';
-								$content .='src="'. $this->EE->config->item('theme_folder_url').'third_party/cartthrob/images/ct_drag_handle.gif" width="10" height="17" /></td>';
+								$content .='src="'. $this->drag_handle .'" width="10" height="17" /></td>';
 									foreach ($setting['settings'] as $matrix_setting) 
 									{
 										$content .='<td style="'.$matrix_setting['style'].'" rel="'.$matrix_setting['short_name'].'"';
-										$content .='class="'.$matrix_setting['short_name'].'_setting_option" >'; 
-										$content .= $settings_mcp->plugin_setting($matrix_setting['type'], $setting['short_name'].'['.$count.']['.$matrix_setting['short_name'].']', @$current_value[$matrix_setting['short_name']], @$matrix_setting['options'], @$matrix_setting['attributes']);
+										$content .='class="'.$matrix_setting['short_name'].'" >'; 
+										$content .= $this->plugin_setting($matrix_setting['type'], $setting['short_name'].'['.$count.']['.$matrix_setting['short_name'].']', @$current_value[$matrix_setting['short_name']], @$matrix_setting['options'], @$matrix_setting['attributes']);
 										$content .='</td>'; 
 									}
 								$content .='<td>'; 
@@ -1149,19 +1224,19 @@ if (! class_exists('Mbr_addon_builder'))
 
 						$content .='
 						<fieldset class="plugin_add_new_setting" >
-							<a href="#" class="ct_add_matrix_row" rel="settings_template" id="add_new_'.$setting['short_name'].'">
+							<a href="#" class="ct_add_matrix_row" id="add_new_'. $setting['short_name'].'">
 								'.lang('add_another_row').'
 							</a>
 						</fieldset>';
 
 						$content .='
 						<table style="display: none;" class="'.$structure['class'].'">
-							<tr id="'.$setting['short_name'].'_blank" class="'.$setting['short_name'].'">
-								<td ><img border="0" src="'.$this->EE->config->item('theme_folder_url').'third_party/cartthrob/images/ct_drag_handle.gif" width="10" height="17" /></td>';
+							<tr id="'. $setting['short_name'].'_blank"  class="'.$setting['short_name'].'">
+								<td ><img border="0" src="'.$this->drag_handle .'" width="10" height="17" /></td>';
 
 								foreach ($setting['settings'] as $matrix_setting)
 								{
-									$content .='<td style="'.$matrix_setting['style'].'"  rel="'.$matrix_setting['short_name'].'"  class="'.$matrix_setting['short_name'].'_setting_option'.'">'.$settings_mcp->plugin_setting($matrix_setting['type'], '', (isset($matrix_setting['default'])) ? $matrix_setting['default'] : '', @$matrix_setting['options'], @$matrix_setting['attributes']).'</td>';							
+									$content .='<td style="'.$matrix_setting['style'].'"  rel="'.$matrix_setting['short_name'].'"  class="'.$matrix_setting['short_name'].'">'.$this->plugin_setting($matrix_setting['type'], '', (isset($matrix_setting['default'])) ? $matrix_setting['default'] : '', @$matrix_setting['options'], @$matrix_setting['attributes']).'</td>';							
 								}
 
 								$content .='
@@ -1178,7 +1253,7 @@ if (! class_exists('Mbr_addon_builder'))
 								<thead class="">
 									<tr>
 										<th colspan="2">
-											<strong>'.$setting['name'].'</strong><br />
+											<strong>'.lang($setting['name']).'</strong><br />
 										</th>
 									</tr>
 								</thead>
@@ -1212,7 +1287,7 @@ if (! class_exists('Mbr_addon_builder'))
 										<label>'.lang($setting['name']).'</label><br><span class="subtext">'.(isset($setting['note']) ? lang($setting['note']) : NULL).'</span>
 										</td>
 									<td style="width:50%;">
-										'.$settings_mcp->plugin_setting($setting['type'], $setting['short_name'], $current_value, @$setting['options'], @$setting['attributes']).'
+										'.$this->plugin_setting($setting['type'], $setting['short_name'], $current_value, @$setting['options'], @$setting['attributes']).'
 									</td>
 								</tr>
 							</tbody>
@@ -1220,23 +1295,50 @@ if (! class_exists('Mbr_addon_builder'))
 					}		
 				}
 			}
+			$content .="</div>";
 			
 			return $content; 
+		}
+		
+		public function get_html($structure, $view_file_name = NULL)
+		{
+ 			$view_path = PATH_THIRD.$this->module_name.'/views/';
+			$view_html = NULL; 
+
+			if (file_exists($view_path.$view_file_name)) {
+				$view_html = $this->EE->load->view($view_file_name, $structure, TRUE); 
+			}
+			else
+			{
+				if (!is_array($structure))
+				{
+					$view_html = $structure;
+				}
+				elseif (!empty($structure['html']))
+				{
+					$view_html = $structure['html']; 
+				}
+				else
+				{
+					// this will probably throw an error,but that's probably what we want
+					$view_html = $this->EE->load->view($view_file_name, $structure, TRUE); 
+				}
+			}
+			return $view_html; 
 		}
 		public function view_settings_form($data)
 		{
 			extract($data); 
 			
-			$tab = $module_name. "_tab"; 
-
-			$content = "<!-- begin right column -->";
+			$tab = $this->module_name. "_tab"; 
+ 			$content = "<!-- begin right column -->";
 
 			$content .='
 			<div class="ct_top_nav">
 				<div class="ct_nav" >';
-				foreach (array_keys($nav) as $method) 
+				foreach (array_keys($this->nav) as $method) 
 				{
-					if (!in_array($method, $no_nav))
+					if (!in_array($method, $this->no_nav))
 					{
 						$content .='<span class="button"><a class="nav_button';
 						if ( ! $this->EE->input->get('method') || $this->EE->input->get('method') == $method)
@@ -1252,7 +1354,7 @@ if (! class_exists('Mbr_addon_builder'))
  							$nav_lang = ucwords(str_replace("_", " ",$method)); 
 						}
 						
-						$content .= ' href="'.BASE.AMP.'C=addons_modules'.AMP.'M=show_module_cp'.AMP.'module='.$module_name.AMP.'method='.$method.'">'.$nav_lang.'</a></span>'; 
+						$content .= ' href="'.BASE.AMP.'C=addons_modules'.AMP.'M=show_module_cp'.AMP.'module='.$this->module_name.AMP.'method='.$method.'">'.$nav_lang.'</a></span>'; 
 					}
 				} 
 			$content .='			
@@ -1263,18 +1365,18 @@ if (! class_exists('Mbr_addon_builder'))
 			$content .='
 			<div class="clear_left shun"></div>';
 
-			if ($this->EE->session->flashdata($module_name.'_system_error'))
+			if ($this->EE->session->flashdata($this->module_name.'_system_error'))
 			{
 				$content .='<div id="ct_system_error"><h4>';
-				$content .= $this->session->flashdata($module_name.'_system_error');
+				$content .= $this->EE->session->flashdata($this->module_name.'_system_error');
 				$content .='</h4></div>';
 
 			}
 
-			if ($this->EE->session->flashdata($module_name.'_system_message'))
+			if ($this->EE->session->flashdata($this->module_name.'_system_message'))
 			{
-				$content .='<div id="ct_system_error"><h4>';
-				$content .= $this->EE->session->flashdata($module_name.'_system_message');
+				$content .='<div id="ct_system_message"><h4>';
+				$content .= $this->EE->session->flashdata($this->module_name.'_system_message');
 				$content .='</h4></div>';
 			}
 
@@ -1294,51 +1396,37 @@ if (! class_exists('Mbr_addon_builder'))
 				$content .= lang('please').' <a href="'.BASE.AMP.'C=addons_modules'.'">'.lang('install').'</a> '.lang('before_proceeding').'</div>';
 			}
 
+			// this *should* be $no_form and not $this->no_form. $this->no_form is an array, while $no_form is boolean
 			if (! $no_form)
 			{
-				$content .= $form_open; 
+				if ($form_open)
+				{
+					$content .= $form_open; 
+				}
+				else
+				{
+					$content .= form_open('C=addons_modules'.AMP.'M=show_module_cp'.AMP.'module='.$this->module_name.AMP.'method=quick_save'.AMP.'return='.$this->EE->input->get('method', "index"));
+				}
 			}
-			$content .='<div id="'.$module_name.'_settings_content">
-				<input type="hidden" name="'.$module_name.'_tab" value="'.$tab.'" id="'.$module_name.'_tab" />'; 
-
+			$content .='<div id="'.$this->module_name.'_settings_content">
+				<input type="hidden" name="'.$this->module_name.'_tab" value="'.$tab.'" id="'.$this->module_name.'_tab" />'; 
  
 			foreach ($sections as $section)
 			{
-					$view_path = (isset($view_paths[$section])) ? $view_paths[$section] : PATH_THIRD.$this->module_name.'/views/';
- 					$view_html = NULL; 
-
-					if (file_exists($view_path.$section)) {
-						$view_html = $this->EE->load->view($section, $data, TRUE); 
-					}
-					else
-					{
-						if (!is_array($data))
-						{
-							$view_html = $data;
-						}
-						elseif (!empty($data['html']))
-						{
-							$view_html = $data['html']; 
-						}
-						else
-						{
-							// this will probably throw an error,but that's probably what we want
-							$view_html = $this->EE->load->view($section, $data, TRUE); 
-						}
- 					}
+				$view_html = $this->get_html($data, $section); 
  					
- 					$section_lang = lang($section."_header"); 
-					if ($section_lang == $section."_header")
-					{
-						$section_lang = ucwords(str_replace("_", " ", $section)); 
-					}
+				$section_lang = lang($section."_header"); 
+				if ($section_lang == $section."_header")
+				{
+					$section_lang = ucwords(str_replace("_", " ", $section)); 
+				}
 
-					$content .='<h3 class="accordion" data-hash="'.$section.'">'.$section_lang.'</h3>
-					<div style="padding: 5px 1px;">
-						'.$view_html.'
-					</div>'; 
+				$content .='<h3 class="accordion" data-hash="'.$section.'">'.$section_lang.'</h3>
+				<div style="padding: 5px 1px;">
+					'.$view_html.'
+				</div>'; 
 			}	
-
+			// see comment above
 			if (! $no_form)
 			{
 				$content .='<p><input type="submit" name="submit" value="'.lang('submit').'" class="submit" /></p>
@@ -1359,7 +1447,7 @@ if (! class_exists('Mbr_addon_builder'))
 				padding: 8px 10px 8px 10px; 
 				margin: 0px 0 10px 0;
 			}
-			#ct_system_error{
+			#ct_system_error, #ct_system_message{
 				border:1px solid #bf0012;
 				background:#ffbc9f url(../images/ct_not_logged_heart.png) no-repeat right top;
 				padding:15px 45px 15px 15px;
@@ -1368,10 +1456,18 @@ if (! class_exists('Mbr_addon_builder'))
 				font-size:14px;
 				margin:0 0 10px 0;
 			}
+			#ct_system_message{
+				border:1px solid #00bf3c;
+				background:#99f7af url(../images/ct_not_logged_heart.png) no-repeat right top;
+				
+			}
 			#ct_system_error a{
 				color:#a10a0a;
 			}
-			#ct_system_error h4{
+			#ct_system_message a{
+				color:#a10a0a;
+			}
+			#ct_system_error h4, #ct_system_message h4{
 			    font-family: 'Lucida Grande', Arial, Helvetica, sans-serif;
 				color:#18362D;
 				font-size:18px;
@@ -1435,91 +1531,86 @@ if (! class_exists('Mbr_addon_builder'))
 		{
 			extract($data); 
 			
-			if (@file_exists($this->EE->config->item('theme_folder_url').'third_party/'.$module_name.'/css/'.$module_name.'.css'))
+			if (@file_exists($this->EE->config->item('theme_folder_url').'third_party/'.$this->module_name.'/css/'.$this->module_name.'.css'))
 			{
-				$css = '<link href="'.$this->EE->config->item('theme_folder_url').'third_party/'.$module_name.'/css/'.$module_name.'.css" rel="stylesheet" type="text/css" media="screen" />'; 
+				$css = '<link href="'.$this->EE->config->item('theme_folder_url').'third_party/'.$this->module_name.'/css/'.$this->module_name.'.css" rel="stylesheet" type="text/css" media="screen" />'; 
 			}
 			else
 			{
 				$css =  $this->default_css(); 
 			}
 			
-			// slightly different structures for extensions and MCP settings. 
-			// this accounts for adding new lines for Extensions vs. MCP
-			if ($this->EE->input->get('M') == "extension_settings")
-			{
-				$add_new_setting_js = '$("fieldset.plugin_add_new_setting a").bind("click", function(){
-					var name = $(this).attr("id").replace("add_new_", "");
-					var count = ($("tr."+name+"_setting:last").length > 0) ? Number($("tr."+name+"_setting:last").attr("id").replace(name+"_setting_","")) + 1 : 0;
-					var plugin_classname = $("#"+name+"_blank").parent().parent().attr("class");
+			// when an href in the plugin_add_new_setting fieldset is clicked....
+			$add_new_setting_js = '$("fieldset.plugin_add_new_setting a").bind("click", function(){
+			// get the name of the thing to add. The ID of the HREF is used as the name
+				var name = $(this).attr("id").replace("add_new_", "");
+				
+			// if there is an existing TR with the classname NAME_setting, look for the ID and remove NAME_setting to get the current count
+				var count = ($("tr."+name+"_setting:last").length > 0) ? Number($("tr."+name+"_setting:last").attr("id").replace(name+"_setting_","")) + 1 : 0;
 
-					var element = $("#"+name+"_blank").attr("class").split(" ");
-					var setting_short_name = element[0];
+			// get the plugin class name from the div that surrounds the table containing the settings 
+				var plugin_classname = $("#"+name+"_blank").parent().parent().attr("class");
 
-					var clone = $("#"+name+"_blank").clone();
-					clone.attr({"id":name+"_setting_"+count});
-					clone.attr({"class":name+"_setting"});
-					clone.attr({"rel": plugin_classname+"_settings["+setting_short_name+"]"});
-					clone.find(":input").each(function(){
-						var matrix_setting_short_name = $(this).parent().attr("class");
-						$(this).parent().attr("rel", matrix_setting_short_name);
+			// there is probably not multiple classes applied, but if there are, split them at the space
+				var element = $("#"+name+"_blank").attr("class").split(" ");
+			// get the short_name from the split class. 
+				var setting_short_name = element[0];
 
-						$(this).attr("name", plugin_classname+"_settings["+setting_short_name+"]["+count+"]["+matrix_setting_short_name+"]");	
-					});
-		 			clone.children("td").attr("class","");
-					$(this).parent().prev().find("tbody").append(clone);
-					return false;
-				});';
-			}
-			else
-			{
-				$add_new_setting_js = '$("fieldset.plugin_add_new_setting a").bind("click", function(){
-					var name = $(this).attr("id").replace("add_new_", "");
+			// clone the blank
+				var clone = $("#"+name+"_blank").clone();
+			
+			// clone the ID NAME_setting_1
+				clone.attr({"id":name+"_setting_"+count});
+			// clone the class, NAME_setting
+				clone.attr({"class":name+"_setting"});
+				
+			// clone the rel STRUCTURE_CLASSNAME_settings[SHORT_NAME]
+				clone.attr({"rel": plugin_classname+"_settings["+setting_short_name+"]"});
+			// finde each INPUT
+				clone.find(":input").each(function(){
 					
-					if (count ==0)
+					// get the SETTING_SHORT_NAME
+					var matrix_setting_short_name = $(this).parent().attr("class");
+					if ( ! $(this).parent().attr("rel"))
 					{
-						count = ($("tr."+name+"_setting:last").length > 0) ? Number($("tr."+name+"_setting:last").attr("id").replace(name+"_setting_","")) + 1 : 0;
+ 						// change the name attribute to STRUCTURE_CLASSNAME_settings[setting_short_name][count][matrix setting short name]
+						$(this).attr("name", plugin_classname+"_settings["+setting_short_name+"]["+count+"]["+matrix_setting_short_name+"]");
+						$(this).attr("rel", plugin_classname); 	
 					}
 					else
 					{
-						count ++; 
+						$(this).attr("name", name+"["+count+"]["+matrix_setting_short_name+"]");	
 					}
-					var plugin_classname = $("#"+name+"_blank").parent().parent().attr("class");
+					// add taht short name to the parent rel
+					$(this).parent().attr("rel", matrix_setting_short_name);
 
-					var element = $("#"+name+"_blank").attr("class").split(" ");
-					var setting_short_name = element[0];
-					var clone = $("#"+name+"_blank").clone();
-					clone.attr({"id":name+"_setting_"+count});
-					clone.attr({"class":name});
-					clone.find(":input").each(function(){
-						var matrix_setting_short_name = $(this).parent().attr("rel");
-						$(this).parent().attr("rel", matrix_setting_short_name);
-
-						$(this).attr("name", setting_short_name + "["+count+"]["+matrix_setting_short_name+"]");	
-					});
-		 			clone.children("td").attr("class","");
-					$(this).parent().prev().find("tbody").append(clone);
-					return false;
-				});';
-			}
+				});
+				// in the clone, remove the content from the TD classes
+	 			clone.children("td").attr("class","");
+				// add to the row above. 
+				$(this).parent().prev().find("tbody").append(clone);
+				return false;
+			});';
+			
 			$content = $css; 
 			$content .='
 
 			<script type="text/javascript">
 
-				jQuery.'.$module_name.'CP = {
+				jQuery.'.$this->module_name.'CP = {
 					currentSection: function() {
 						if (window.location.hash && window.location.hash != "#") {
 							return window.location.hash.substring(1);
 						} else {
-							return $("#'.$module_name.'_settings_content h3:first").attr("data-hash");
+							return $("#'.$this->module_name.'_settings_content h3:first").attr("data-hash");
 						}
 					},
  					'.(isset($channel_titles) ? "channels: ".$this->EE->javascript->generate_json($channel_titles).',' : NULL).'
  					'.(isset($product_channel_titles) ? "product_channels: ".$this->EE->javascript->generate_json($product_channel_titles).',' : NULL).'
 					'.(isset($fields) ? "fields: ".$this->EE->javascript->generate_json($fields).',' : NULL).'
 					'.(isset($product_channel_fields) ? "product_channel_fields: ".$this->EE->javascript->generate_json($product_channel_fields).',' : NULL).'
- 					'.(isset($statuses) ? "statuses: ".$this->EE->javascript->generate_json($statuses).',' : NULL).'
+					'.(isset($order_channel_fields) ? "order_channel_fields: ".$this->EE->javascript->generate_json($order_channel_fields).',' : NULL).'
+ 					'.(isset($status_titles) ? "statuses: ".$this->EE->javascript->generate_json($status_titles).',' : NULL).'
 					'.(isset($templates) ? "templates: ".$this->EE->javascript->generate_json($templates).',' : NULL).'
 					'.(isset($states) ? "states: ".$this->EE->javascript->generate_json($states).',' : NULL).'
 				 	'.(isset($countries) ? "countries: ".$this->EE->javascript->generate_json($countries).',': NULL).'
@@ -1541,7 +1632,7 @@ if (! class_exists('Mbr_addon_builder'))
 								attrs[select.attributes[i].name] = select.attributes[i].value;
 							}
 						}
-						$(select).replaceWith($.'.$module_name.'CP.createSelect(attrs, options, val));
+						$(select).replaceWith($.'.$this->module_name.'CP.createSelect(attrs, options, val));
 					},
 					createSelect: function(attributes, options, selected) {
 						var select = "<select ";
@@ -1564,72 +1655,81 @@ if (! class_exists('Mbr_addon_builder'))
 				jQuery(document).ready(function($){
 
 					$("select.states").each(function(){
-						$.'.$module_name.'CP.updateSelect(this, $.'.$module_name.'CP.states);
+						$.'.$this->module_name.'CP.updateSelect(this, $.'.$this->module_name.'CP.states);
 					});
 					$("select.states_blank").each(function(){
 						var states = {"" : "---"};
-						$.extend(states, $.'.$module_name.'CP.states);
-						$.'.$module_name.'CP.updateSelect(this, states);
+						$.extend(states, $.'.$this->module_name.'CP.states);
+						$.'.$this->module_name.'CP.updateSelect(this, states);
 					});
 					$("select.templates").each(function(){
-						$.'.$module_name.'CP.updateSelect(this, $.'.$module_name.'CP.templates);
+						$.'.$this->module_name.'CP.updateSelect(this, $.'.$this->module_name.'CP.templates);
 					});
 					$("select.templates_blank").each(function(){
 						var templates = {"" : "---"};
-						$.extend(templates, $.'.$module_name.'CP.templates);
-						$.'.$module_name.'CP.updateSelect(this, templates);
+						$.extend(templates, $.'.$this->module_name.'CP.templates);
+						$.'.$this->module_name.'CP.updateSelect(this, templates);
 					});
 					$("select.statuses").each(function(){
-						$.'.$module_name.'CP.updateSelect(this, $.'.$module_name.'CP.statuses);
+						$.'.$this->module_name.'CP.updateSelect(this, $.'.$this->module_name.'CP.statuses);
 					});
 					$("select.statuses_blank").each(function(){
 						var statuses = {"" : "---", "ANY" : "ANY"};
-						$.extend(statuses, $.'.$module_name.'CP.statuses);
-						$.'.$module_name.'CP.updateSelect(this, statuses);
+						$.extend(statuses, $.'.$this->module_name.'CP.statuses);
+						$.'.$this->module_name.'CP.updateSelect(this, statuses);
 					});
 
 					$("select.countries").each(function(){
-						$.'.$module_name.'CP.updateSelect(this, $.'.$module_name.'CP.countries);
+						$.'.$this->module_name.'CP.updateSelect(this, $.'.$this->module_name.'CP.countries);
 					});
 					$("select.countries_blank").each(function(){
 						var countries = {"" : "---"};
-						$.extend(countries, $.'.$module_name.'CP.countries);
-						$.'.$module_name.'CP.updateSelect(this, countries);
+						$.extend(countries, $.'.$this->module_name.'CP.countries);
+						$.'.$this->module_name.'CP.updateSelect(this, countries);
 					});
 					$("select.states_and_countries").each(function(){
-						$.'.$module_name.'CP.updateSelect(this, $.'.$module_name.'CP.statesAndCountries);
+						$.'.$this->module_name.'CP.updateSelect(this, $.'.$this->module_name.'CP.statesAndCountries);
 					});
 					$("select.all_fields").each(function(){
 						var fields = {"":"---"};
-						for (i in $.'.$module_name.'CP.fields) {
-							for (j in $.'.$module_name.'CP.fields[i]) {
-								fields["field_id_"+$.'.$module_name.'CP.fields[i][j].field_id] = $.'.$module_name.'CP.fields[i][j].field_label;
+						for (i in $.'.$this->module_name.'CP.fields) {
+							for (j in $.'.$this->module_name.'CP.fields[i]) {
+								fields["field_id_"+$.'.$this->module_name.'CP.fields[i][j].field_id] = $.'.$this->module_name.'CP.fields[i][j].field_label;
 							}
 						}
-						$.'.$module_name.'CP.updateSelect(this, fields);
+						$.'.$this->module_name.'CP.updateSelect(this, fields);
 					});
 					$("select.product_channel_fields").each(function(){
 						var product_channel_fields = {"":"---"};
-						for (i in $.'.$module_name.'CP.product_channel_fields) {
-							for (j in $.'.$module_name.'CP.product_channel_fields[i]) {
-								product_channel_fields["field_id_"+$.'.$module_name.'CP.product_channel_fields[i][j].field_id] = $.'.$module_name.'CP.product_channel_fields[i][j].field_label;
+						for (i in $.'.$this->module_name.'CP.product_channel_fields) {
+							for (j in $.'.$this->module_name.'CP.product_channel_fields[i]) {
+								product_channel_fields["field_id_"+$.'.$this->module_name.'CP.product_channel_fields[i][j].field_id] = $.'.$this->module_name.'CP.product_channel_fields[i][j].field_label;
 							}
 						}
-						$.'.$module_name.'CP.updateSelect(this, product_channel_fields);
+						$.'.$this->module_name.'CP.updateSelect(this, product_channel_fields);
+					});
+					$("select.order_channel_fields").each(function(){
+						var order_channel_fields = {"":"---"};
+						for (i in $.'.$this->module_name.'CP.order_channel_fields) {
+							for (j in $.'.$this->module_name.'CP.order_channel_fields[i]) {
+								order_channel_fields["field_id_"+$.'.$this->module_name.'CP.order_channel_fields[i][j].field_id] = $.'.$this->module_name.'CP.order_channel_fields[i][j].field_label;
+							}
+						}
+						$.'.$this->module_name.'CP.updateSelect(this, order_channel_fields);
 					});
 					$("select.channels").each(function(){
-						$.'.$module_name.'CP.updateSelect(this, $.'.$module_name.'CP.channels);
+						$.'.$this->module_name.'CP.updateSelect(this, $.'.$this->module_name.'CP.channels);
 					});
 					$("select.product_channels").each(function(){
-						$.'.$module_name.'CP.updateSelect(this, $.'.$module_name.'CP.product_channels);
+						$.'.$this->module_name.'CP.updateSelect(this, $.'.$this->module_name.'CP.product_channels);
 					});
 					
-					$.'.$module_name.'CP.checkSelectedChannel("#select_orders", ".requires_orders_channel"); 
+					$.'.$this->module_name.'CP.checkSelectedChannel("#select_orders", ".requires_orders_channel"); 
 					
 					
 					
 					$("#select_orders").bind("change", function(){
-						$.'.$module_name.'CP.checkSelectedChannel("#select_orders", ".requires_orders_channel"); 
+						$.'.$this->module_name.'CP.checkSelectedChannel("#select_orders", ".requires_orders_channel"); 
 					});
 					
 					
@@ -1639,15 +1739,15 @@ if (! class_exists('Mbr_addon_builder'))
 						$("select.field_"+section).children().not(".blank").remove();
 			 			if ($(this).val() != "")
 						{
-							for (i in $.'.$module_name.'CP.product_channel_fields[channel_id])
+							for (i in $.'.$this->module_name.'CP.product_channel_fields[channel_id])
 							{
-								$("select.field_"+section).append("<option value=\""+$.'.$module_name.'CP.product_channel_fields[channel_id][i].field_id+"\">"+$.'.$module_name.'CP.product_channel_fields[channel_id][i].field_label+"</option>");
+								$("select.field_"+section).append("<option value=\""+$.'.$this->module_name.'CP.product_channel_fields[channel_id][i].field_id+"\">"+$.'.$this->module_name.'CP.product_channel_fields[channel_id][i].field_label+"</option>");
 							}
 
 						}
 					});
 
-					$("#'.$module_name.'_tab").val($.'.$module_name.'CP.currentSection() );
+					$("#'.$this->module_name.'_tab").val($.'.$this->module_name.'CP.currentSection() );
 
 					var count = 0; 
 					'.$add_new_setting_js.'
@@ -1719,9 +1819,9 @@ if (! class_exists('Mbr_addon_builder'))
 		public function view_plugin_settings($data)
 		{
 			extract($data); 
+			$content =""; 
 			foreach ($plugins as $plugin)
 			{
-				$content =""; 
 				$content .='<div class="'.$plugin_type.'_settings" id="'.$plugin['classname'].'">
 
 					<table class="mainTable padTable" border="0" cellspacing="0" cellpadding="0">
@@ -1802,7 +1902,7 @@ if (! class_exists('Mbr_addon_builder'))
 
 													$content .='
 				 									<th>
-														<strong>'.lang($matrix_setting['name']).'</strong>'.(isset($matrix_setting['note'])) ? '<br />'.lang($matrix_setting['note']) : ''.'
+														<strong>'.lang($matrix_setting['name']).'</strong>'.(isset($matrix_setting['note']) ? '<br />'.lang($matrix_setting['note']) : '').'
 													</th>';
 												}
 
@@ -1825,17 +1925,17 @@ if (! class_exists('Mbr_addon_builder'))
 										<tr class="'.$plugin['classname'].'_'.$setting['short_name'].'_setting" 
 											rel = "'.$plugin['classname'].'_settings['.$setting['short_name'].']'.'" 		
 											id="'.$plugin['classname'].'_'.$setting['short_name'].'_setting_'.$count.'">
-											<td><img border="0" src="'.$this->config->item('theme_folder_url').'third_party/cartthrob/images/ct_drag_handle.gif" width="10" height="17" /></td>';
+											<td><img border="0" src="'.$this->drag_handle .'" width="10" height="17" /></td>';
 											foreach ($setting['settings'] as $matrix_setting) 
 											{
-												$content .='<td  style="'.$matrix_setting['style'].'" rel="'.$matrix_setting['short_name'].'">'.$cartthrob_mcp->plugin_setting($matrix_setting['type'], $plugin['classname'].'_settings['.$setting['short_name'].']['.$count.']['.$matrix_setting['short_name'].']', @$current_value[$matrix_setting['short_name']], @$matrix_setting['options'], @$matrix_setting['attributes']).'</td>';									
+												$content .='<td  style="'.$matrix_setting['style'].'" rel="'.$matrix_setting['short_name'].'">'.$this->plugin_setting($matrix_setting['type'], $plugin['classname'].'_settings['.$setting['short_name'].']['.$count.']['.$matrix_setting['short_name'].']', @$current_value[$matrix_setting['short_name']], @$matrix_setting['options'], @$matrix_setting['attributes']).'</td>';									
 											}
 
 											$content .='
 
 											<td>
 												<a href="#" class="remove_matrix_row">
-													<img border="0" src="'.$this->config->item('theme_folder_url').'cp_themes/default/images/content_custom_tab_delete.png" />
+													<img border="0" src="'.$this->EE->config->item('theme_folder_url').'cp_themes/default/images/content_custom_tab_delete.png" />
 												</a>
 											</td>
 										</tr>	';						
@@ -1853,16 +1953,16 @@ if (! class_exists('Mbr_addon_builder'))
 
 								<table style="display: none;" class="'.$plugin['classname'].'">
 									<tr id="'.$plugin['classname'].'_'.$setting['short_name'].'_blank" class="'.$setting['short_name'].'">
-										<td  ><img border="0" src="'.$this->config->item('theme_folder_url').'third_party/cartthrob/images/ct_drag_handle.gif" width="10" height="17" /></td>';
+										<td  ><img border="0" src="'.$this->drag_handle .'" width="10" height="17" /></td>';
 
 										foreach ($setting['settings'] as $matrix_setting)
 										{
-											$content .='<td  class="'.$matrix_setting['short_name'].'" style="'.$matrix_setting['style'].'">'.$cartthrob_mcp->plugin_setting($matrix_setting['type'], '', (isset($matrix_setting['default'])) ? $matrix_setting['default'] : '', @$matrix_setting['options'], @$matrix_setting['attributes']).'</td>';							
+											$content .='<td  class="'.$matrix_setting['short_name'].'" style="'.$matrix_setting['style'].'">'.$this->plugin_setting($matrix_setting['type'], '', (isset($matrix_setting['default'])) ? $matrix_setting['default'] : '', @$matrix_setting['options'], @$matrix_setting['attributes']).'</td>';							
 										}
 
 										$content.='
 										<td>
-											<a href="#" class="remove_matrix_row"><img border="0" src="'.$this->config->item('theme_folder_url').'cp_themes/default/images/content_custom_tab_delete.png" /></a>
+											<a href="#" class="remove_matrix_row"><img border="0" src="'.$this->EE->config->item('theme_folder_url').'cp_themes/default/images/content_custom_tab_delete.png" /></a>
 										</td>
 									</tr>
 								</table>';
@@ -1892,10 +1992,10 @@ if (! class_exists('Mbr_addon_builder'))
 									<tbody>
 										<tr class="even">
 											<td>
-												<label>'.lang($setting['name']).'</label><br><span class="subtext">'.(isset($setting['note'])) ? lang($setting['note']) : ''.'</span>
+												<label>'.lang($setting['name']).'</label><br><span class="subtext">'.(isset($setting['note']) ? lang($setting['note']) : '').'</span>
 			 								</td>
 											<td style="width:50%;">
-												'.$cartthrob_mcp->plugin_setting($setting['type'], $plugin['classname'].'_settings['.$setting['short_name'].']', $current_value, @$setting['options'], @$setting['attributes']).'
+												'.$this->plugin_setting($setting['type'], $plugin['classname'].'_settings['.$setting['short_name'].']', $current_value, @$setting['options'], @$setting['attributes']).'
 											</td>
 										</tr>
 									</tbody>
