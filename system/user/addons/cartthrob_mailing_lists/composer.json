@@ -1,0 +1,45 @@
+{
+    "name": "cartthrob/cartthrob_mailing_lists",
+    "type": "project",
+    "authors": [
+        {
+            "name": "CartThrob",
+            "email": "support@cartthrob.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.1",
+        "mailchimp/marketing": "^3.0"
+    },
+    "replace": {
+        "guzzlehttp/psr7": "*",
+        "guzzlehttp/guzzle": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "CartThrob\\MailingLists\\": "src"
+        },
+        "classmap": [
+            "."
+        ],
+        "exclude-from-classmap": [
+            "*.cartthrob_mailing_lists.php",
+            "src"
+        ]
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "rm -rf vendor/**/**/.git"
+        ],
+        "post-update-cmd": [
+            "rm -rf vendor/**/**/.git"
+        ]
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "preferred-install": {
+            "*": "dist"
+        }
+    }
+}

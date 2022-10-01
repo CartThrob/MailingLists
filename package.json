@@ -1,0 +1,14 @@
+{
+  "name": "cartthrob_mailing_lists",
+  "scripts": {
+    "build-addon": "./automation/make_addon.command",
+    "fixer": "./automation/php-cs-fixer --verbose fix",
+    "selenium": "java -jar -Dwebdriver.chrome.driver=./automation/chromedriver \"automation/selenium-server-standalone-3.141.59.jar\"",
+    "ngrok": "ngrok http -host-header=rewrite ct.test:443"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CartThrob/MailingLists"
+  },
+  "private": true
+}
