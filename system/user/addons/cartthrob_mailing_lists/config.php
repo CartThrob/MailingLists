@@ -16,5 +16,5 @@ if (defined('PATH_THEMES')) {
 
 $config['name'] = 'CartThrob Mailing List';
 $config['version'] = CT_MAILING_LIST_VERSION;
-$config['cartthrob_mailing_list'] = 'Integrates CartThrob with third party mailing lists.';
+$config['cartthrob_mailing_lists'] = 'Integrates CartThrob with third party mailing lists.';
 $config['nsm_addon_updater']['versions_xml'] = 'http://cartthrob.com/versions.xml';

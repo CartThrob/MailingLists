@@ -1,6 +1,7 @@
 <?php
 
 $lang = [
+    'ct.ml.nav' => 'Mailing List Manager',
     'cartthrob_mailing_lists_module_name' => 'CartThrob Mailing List Manager',
     'cartthrob_mailing_lists_module_description' => '',
     'cartthrob_mailing_lists_module_updated' => 'Settings updated',

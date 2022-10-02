@@ -12,10 +12,10 @@ class CartthrobOnAuthorizeHook extends Hook
      */
     public function process($valid_addons)
     {
-        $custom_data = $this->EE->cartthrob->cart->order('custom_data');
-        $last_name = $this->EE->cartthrob->cart->order('last_name');
-        $first_name = $this->EE->cartthrob->cart->order('first_name');
-        $email_address = $this->EE->cartthrob->cart->order('email_address');
+        $custom_data = ee()->cartthrob->cart->order('custom_data');
+        $last_name = ee()->cartthrob->cart->order('last_name');
+        $first_name = ee()->cartthrob->cart->order('first_name');
+        $email_address = ee()->cartthrob->cart->order('email_address');
 
         if (isset($custom_data['campaign_monitor'])) {
             if (!is_array($custom_data['campaign_monitor'])) {
@@ -56,7 +56,7 @@ class CartthrobOnAuthorizeHook extends Hook
             $double_opt_in = true;
         }
 
-        $result = $mailchimp_api->listSubscribe($list_id, $email, ['FNAME' => $this->EE->cartthrob->cart->order('first_name'), 'LNAME' => $this->EE->cartthrob->cart->order('last_name')], $email_type = 'html', $double_opt_in);
+        $result = $mailchimp_api->listSubscribe($list_id, $email, ['FNAME' => ee()->cartthrob->cart->order('first_name'), 'LNAME' => ee()->cartthrob->cart->order('last_name')], $email_type = 'html', $double_opt_in);
     }
 
     /**

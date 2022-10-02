@@ -4,9 +4,9 @@ if (!defined('BASEPATH')) {
     exit('No direct script access allowed');
 }
 
-class Cartthrob_mailing_list_mcp
+class Cartthrob_mailing_lists_mcp
 {
-    private $module_name;
+    private $module_name = "cartthrob_mailing_lists";
     public $required_settings = [];
     public $template_errors = [];
     public $templates_installed = [];
@@ -41,14 +41,11 @@ class Cartthrob_mailing_list_mcp
 
     public function __construct()
     {
-        $this->module_name = strtolower(str_replace(['_ext', '_mcp', '_upd'], '', __CLASS__));
+        ee()->load->add_package_path(PATH_THIRD . $this->module_name . '/');
+        include PATH_THIRD . $this->module_name . '/config.php';
 
-        $this->EE = &get_instance();
-        $this->EE->load->add_package_path(PATH_THIRD . $this->module_name . '/');
-        include PATH_THIRD . $this->module_name . '/config' . EXT;
-
-        $this->EE->load->add_package_path(PATH_THIRD . 'cartthrob/');
-        $this->EE->load->library('cartthrob_loader');
+        ee()->load->add_package_path(PATH_THIRD . 'cartthrob/');
+        ee()->load->library('cartthrob_loader');
     }
 
     private function initialize()
@@ -56,10 +53,10 @@ class Cartthrob_mailing_list_mcp
         $this->params['module_name'] = $this->module_name;
         $this->params['nav'] = [
             'campaign_monitor' => [
-                'campaign_monitor' => $this->EE->lang->line('nav_campaign_monitor'),
+                'campaign_monitor' => ee()->lang->line('nav_campaign_monitor'),
             ],
             'mailchimp' => [
-                'mailchimp' => $this->EE->lang->line('nav_mailchimp'),
+                'mailchimp' => ee()->lang->line('nav_mailchimp'),
             ],
             //  need to add reset method for processing transactions.
         ];
@@ -75,13 +72,13 @@ class Cartthrob_mailing_list_mcp
             'delete',
         ];
 
-        $this->EE->load->library('mbr_addon_builder');
-        $this->EE->mbr_addon_builder->initialize($this->params);
+        ee()->load->library('mbr_addon_builder');
+        ee()->mbr_addon_builder->initialize($this->params);
     }
 
     public function quick_save()
     {
-        return $this->EE->mbr_addon_builder->quick_save();
+        return ee()->mbr_addon_builder->quick_save();
     }
 
     public function campaign_monitor()
@@ -107,7 +104,7 @@ class Cartthrob_mailing_list_mcp
             ],
         ];
 
-        return $this->EE->mbr_addon_builder->load_view(__FUNCTION__, [], $structure);
+        return ee()->mbr_addon_builder->load_view(__FUNCTION__, [], $structure);
     }
 
     public function mailchimp()
@@ -133,7 +130,7 @@ class Cartthrob_mailing_list_mcp
             ],
         ];
 
-        return $this->EE->mbr_addon_builder->load_view(__FUNCTION__, [], $structure);
+        return ee()->mbr_addon_builder->load_view(__FUNCTION__, [], $structure);
     }
 
     public function index()
@@ -144,6 +141,6 @@ class Cartthrob_mailing_list_mcp
         } else {
             $method = 'campaign_monitor';
         }
-        $this->EE->functions->redirect(BASE . AMP . 'C=addons_modules' . AMP . 'M=show_module_cp' . AMP . 'module=' . $this->module_name . AMP . 'method=' . $method);
+        ee()->functions->redirect(BASE . AMP . 'C=addons_modules' . AMP . 'M=show_module_cp' . AMP . 'module=' . $this->module_name . AMP . 'method=' . $method);
     }
 }

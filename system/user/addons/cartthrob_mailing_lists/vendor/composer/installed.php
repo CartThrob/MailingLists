@@ -3,7 +3,7 @@
         'name' => 'cartthrob/cartthrob_mailing_lists',
         'pretty_version' => 'dev-develop',
         'version' => 'dev-develop',
-        'reference' => 'c326d270df75a26b4700d528a537f06c804cc768',
+        'reference' => '8d063213b4863be8d22170dd65ead8c6d0619031',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -13,7 +13,7 @@
         'cartthrob/cartthrob_mailing_lists' => array(
             'pretty_version' => 'dev-develop',
             'version' => 'dev-develop',
-            'reference' => 'c326d270df75a26b4700d528a537f06c804cc768',
+            'reference' => '8d063213b4863be8d22170dd65ead8c6d0619031',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

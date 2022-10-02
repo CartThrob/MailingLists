@@ -2,7 +2,7 @@
 
 use ExpressionEngine\Service\Addon\Installer;
 
-class Cartthrob_mailing_list_upd extends Installer
+class Cartthrob_mailing_lists_upd extends Installer
 {
     public string $module_name = 'cartthrob_mailing_lists';
 
@@ -50,8 +50,12 @@ class Cartthrob_mailing_list_upd extends Installer
      */
     public function install(): bool
     {
+        ee()->load->add_package_path(PATH_THIRD . 'cartthrob/');
+
         ee()->load->model('table_model');
         ee()->table_model->update_tables($this->tables);
+
+        ee()->load->remove_package_path(PATH_THIRD . 'cartthrob/');
 
         return parent::install();
     }
@@ -74,7 +78,9 @@ class Cartthrob_mailing_list_upd extends Installer
      */
     public function uninstall(): bool
     {
-        foreach ($this->table as $table => $definition) {
+        foreach ($this->tables as $table => $definition) {
+            ee()->load->dbforge();
+
             if (ee()->db->table_exists($table)) {
                 ee()->dbforge->drop_table($table);
             }

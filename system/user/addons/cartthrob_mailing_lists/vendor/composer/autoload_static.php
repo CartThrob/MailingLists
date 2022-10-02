@@ -29,6 +29,9 @@ class ComposerStaticInitb9ee131c93e3f5113d2d080c14e58879
     );
 
     public static $classMap = array (
+        'ComposerAutoloaderInitb9ee131c93e3f5113d2d080c14e58879' => __DIR__ . '/..' . '/composer/autoload_real.php',
+        'Composer\\Autoload\\ClassLoader' => __DIR__ . '/..' . '/composer/ClassLoader.php',
+        'Composer\\Autoload\\ComposerStaticInitb9ee131c93e3f5113d2d080c14e58879' => __DIR__ . '/..' . '/composer/autoload_static.php',
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
         'MCAPI' => __DIR__ . '/../..' . '/libraries/MCAPI.class.php',
         'MailchimpMarketing\\ApiClient' => __DIR__ . '/..' . '/mailchimp/marketing/lib/ApiClient.php',

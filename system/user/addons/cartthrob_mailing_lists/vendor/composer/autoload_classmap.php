@@ -6,6 +6,9 @@ $vendorDir = dirname(__DIR__);
 $baseDir = dirname($vendorDir);
 
 return array(
+    'ComposerAutoloaderInitb9ee131c93e3f5113d2d080c14e58879' => $vendorDir . '/composer/autoload_real.php',
+    'Composer\\Autoload\\ClassLoader' => $vendorDir . '/composer/ClassLoader.php',
+    'Composer\\Autoload\\ComposerStaticInitb9ee131c93e3f5113d2d080c14e58879' => $vendorDir . '/composer/autoload_static.php',
     'Composer\\InstalledVersions' => $vendorDir . '/composer/InstalledVersions.php',
     'MCAPI' => $baseDir . '/libraries/MCAPI.class.php',
     'MailchimpMarketing\\ApiClient' => $vendorDir . '/mailchimp/marketing/lib/ApiClient.php',
