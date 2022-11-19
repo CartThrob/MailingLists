@@ -2,8 +2,6 @@
 
 namespace CartThrob\MailingLists\Services;
 
-use CartThrob\MailingLists\Services\MailChimpService;
-
 class MailingListService
 {
     public $service;
@@ -15,11 +13,9 @@ class MailingListService
 
     public function subscribe()
     {
-
     }
 
     public function unsubscribe()
     {
-
     }
 }

@@ -10,11 +10,11 @@ class Cartthrob_mailing_lists_ext extends Installer
 
     public $methods = [
         [
-            'hook' => 'cartthrob_on_authorize'
+            'hook' => 'cartthrob_on_authorize',
         ],
         [
-            'hook' => 'cp_menu_array'
-        ]
+            'hook' => 'cp_menu_array',
+        ],
     ];
 
     /**

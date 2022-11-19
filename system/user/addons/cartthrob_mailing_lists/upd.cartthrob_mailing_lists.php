@@ -13,7 +13,6 @@ class Cartthrob_mailing_lists_upd extends Installer
     public $has_cp_backend = 'y';
     public $has_publish_fields = 'n';
 
-
     public $version;
     public $current;
 
@@ -45,9 +44,6 @@ class Cartthrob_mailing_lists_upd extends Installer
         parent::__construct();
     }
 
-    /**
-     * @return bool
-     */
     public function install(): bool
     {
         ee()->load->add_package_path(PATH_THIRD . 'cartthrob/');
@@ -62,7 +58,6 @@ class Cartthrob_mailing_lists_upd extends Installer
 
     /**
      * @param $current
-     * @return bool
      */
     public function update($current = ''): bool
     {
@@ -73,9 +68,6 @@ class Cartthrob_mailing_lists_upd extends Installer
         return true;
     }
 
-    /**
-     * @return bool
-     */
     public function uninstall(): bool
     {
         foreach ($this->tables as $table => $definition) {

@@ -6,7 +6,7 @@ if (!defined('BASEPATH')) {
 
 class Cartthrob_mailing_lists_mcp
 {
-    private $module_name = "cartthrob_mailing_lists";
+    private $module_name = 'cartthrob_mailing_lists';
     public $required_settings = [];
     public $template_errors = [];
     public $templates_installed = [];
